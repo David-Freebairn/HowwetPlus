@@ -35,17 +35,20 @@ from core.cropwater import (run_fallow_to_crop, replay_historical_seasons, pasw_
                              historical_phase_percentiles, percentile_rank, FallowCropConfig)
 from core.report import build_report_docx
 
+HERE = Path(__file__).resolve().parent
+DATA_DIR = HERE / "data"
+ASSETS_DIR = HERE / "assets"
+ICON_PATH = ASSETS_DIR / "howwet_icon.png"
+REPORT_ICON_PATH = ASSETS_DIR / "howwet_icon_report.png"
+HISTORY_YEARS = 20
+
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Howwet? +",
-    page_icon="🌱",
+    page_icon=str(ICON_PATH) if ICON_PATH.exists() else "🌱",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-HERE = Path(__file__).resolve().parent
-DATA_DIR = HERE / "data"
-HISTORY_YEARS = 20
 
 
 @st.cache_resource
@@ -253,7 +256,14 @@ def water_balance_table_md(sub_df: pd.DataFrame, hist_phase: dict = None):
 # ── UI ───────────────────────────────────────────────────────────────────────
 GENERIC_CROP_PATH = DATA_DIR / "generic_crop.xlsx"
 
-st.markdown('# 🌱 Howwet? <sup style="font-size:0.55em;">+</sup>', unsafe_allow_html=True)
+title_col1, title_col2 = st.columns([1, 11], vertical_alignment="center")
+with title_col1:
+    if ICON_PATH.exists():
+        st.image(str(ICON_PATH), width=64)
+    else:
+        st.markdown("### 🌱")
+with title_col2:
+    st.markdown('# Howwet? <sup style="font-size:0.55em;">+</sup>', unsafe_allow_html=True)
 st.caption("*Following soil water – from fallow through to the following crop*")
 
 soil_files = load_soil_files()
@@ -543,13 +553,6 @@ if st.session_state.get("result"):
                    (f"  |  Historical %ile ranks each total against {r['plume']['n_years']} replayed seasons since 1995"
                     if r.get("plume") else ""))
 
-    st.download_button(
-        "📥 Download daily results (CSV)",
-        data=df.drop(columns=["sw_layers"]).to_csv().encode(),
-        file_name=f"SoilWater_{r['stn_name'].replace(' ', '_')}_{r['fallow_start']}_{r['sim_end']}.csv",
-        mime="text/csv",
-    )
-
     try:
         chart_buf = io.BytesIO()
         fig.savefig(chart_buf, format="png", dpi=150, bbox_inches="tight")
@@ -569,7 +572,8 @@ if st.session_state.get("result"):
             "Crop factor (fixed)": f"{CROP_FACTOR:.2f}",
             "PAWC": f"{pawc:.0f} mm",
         }
-        report_bytes = build_report_docx(report_inputs, df, r.get("hist_pct"), r.get("plume"), chart_png)
+        report_bytes = build_report_docx(report_inputs, df, r.get("hist_pct"), r.get("plume"), chart_png,
+                                          icon_path=REPORT_ICON_PATH if REPORT_ICON_PATH.exists() else None)
 
         st.download_button(
             "📄 Download report (Word)",
