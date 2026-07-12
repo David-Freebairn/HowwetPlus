@@ -79,7 +79,8 @@ def _add_water_balance_table(doc, title, sub_df, hist_phase):
             row[3].text = f"{p:.0f}th" if p is not None else "\u2014"
 
 
-def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: bytes) -> bytes:
+def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: bytes,
+                       icon_path=None) -> bytes:
     """
     Parameters
     ----------
@@ -92,6 +93,7 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
     plume     : pasw_plume_from_replays() output, or None (used for the
                 "N replayed seasons" note)
     chart_png : PNG bytes of the soil water chart, exactly as shown in-app
+    icon_path : optional path to a logo image, placed above the title
 
     Returns
     -------
@@ -99,8 +101,17 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
     """
     from docx import Document
     from docx.shared import Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = Document()
+
+    if icon_path:
+        try:
+            icon_para = doc.add_paragraph()
+            icon_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            icon_para.add_run().add_picture(str(icon_path), width=Inches(1.0))
+        except Exception:
+            pass  # missing/unreadable icon shouldn't block the report
 
     doc.add_heading("Howwet? + \u2014 Soil Water Report", level=0)
 
