@@ -14,9 +14,6 @@ document generated at authoring time.
 import io
 from datetime import datetime
 
-from docx import Document
-from docx.shared import Inches
-
 
 _COMPONENT_ROWS = [
     ("Rainfall", "rain", "rain"),
@@ -100,6 +97,9 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
     -------
     bytes of the generated .docx file
     """
+    from docx import Document
+    from docx.shared import Inches
+
     doc = Document()
 
     doc.add_heading("Howwet? + \u2014 Soil Water Report", level=0)
