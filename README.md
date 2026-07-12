@@ -158,6 +158,18 @@ No secrets or API keys needed — SILO's endpoint is public.
   cache still helps while an instance stays warm (shared across everyone
   hitting that instance), but don't expect it to persist for days the way
   it might running locally.
+- **Python version**: chosen once, at deploy time, in the "Advanced
+  settings" dialog — not changeable afterward without deleting and
+  redeploying the app. `runtime.txt` is currently unreliable for this on
+  Community Cloud (multiple live reports of it being ignored in favour of
+  whatever the newest available Python is). If the app segfaults on
+  startup with no Python traceback (just "Segmentation fault" in the
+  logs), that's a strong sign the environment landed on a very new Python
+  version paired with equally new numpy/pandas/matplotlib builds that
+  haven't had their C-extension ABI shaken out yet — delete and redeploy,
+  explicitly picking a mature Python version (3.11 or 3.12) in Advanced
+  settings. `requirements.txt` also pins upper bounds on numpy/pandas/
+  matplotlib for the same reason, rather than leaving them fully open-ended.
 
 ## Things you may want to revisit
 
