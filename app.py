@@ -154,7 +154,9 @@ def make_pasw_chart(df, profile, plant_date, maturity_date, stn_name, start_date
 
     if plume is not None:
         ax.fill_between(plume["dates"], plume["low"], plume["high"], color=C_HIST, alpha=0.35, zorder=1)
-        ax.plot(plume["dates"], plume["median"], color="#8FD3FE", lw=1.6, zorder=2)
+        median = plume.get("median")  # older cached sessions may predate this key
+        if median is not None:
+            ax.plot(plume["dates"], median, color="#8FD3FE", lw=1.6, zorder=2)
 
         # Anchor labels a little before the right edge (not at the very last
         # point) and right-align them, so they sit inside the plot area
@@ -165,8 +167,9 @@ def make_pasw_chart(df, profile, plant_date, maturity_date, stn_name, start_date
                     fontsize=8, color="#5E7A99", va="bottom", ha="right")
         ax.annotate("20%", xy=(anchor_x, plume["low"][anchor_i]), xytext=(0, -4), textcoords="offset points",
                     fontsize=8, color="#5E7A99", va="top", ha="right")
-        ax.annotate("50%", xy=(anchor_x, plume["median"][anchor_i]), xytext=(0, 4), textcoords="offset points",
-                    fontsize=8, color="#4F9FD6", va="bottom", ha="right")
+        if median is not None:
+            ax.annotate("50%", xy=(anchor_x, median[anchor_i]), xytext=(0, 4), textcoords="offset points",
+                        fontsize=8, color="#4F9FD6", va="bottom", ha="right")
 
     ax.plot(df.index, df["pasw"], color=C_RECENT, lw=2.4, zorder=4, label="Plant available soil water")
     ax.axhline(pawc, color="#CC4422", lw=0.9, ls="--", alpha=0.6, zorder=2)
