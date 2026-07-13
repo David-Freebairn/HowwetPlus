@@ -262,8 +262,9 @@ def replay_historical_seasons(met_full: pd.DataFrame, profile, fallow_start, pla
 
 def pasw_plume_from_replays(replays, fallow_start, pctiles=(20, 80)):
     """
-    Build a day-by-day 20-80%ile PASW band from replay_historical_seasons()
-    output. Returns None if fewer than 3 usable historical years.
+    Build a day-by-day 20-80%ile PASW band (plus the 50th percentile/median)
+    from replay_historical_seasons() output. Returns None if fewer than 3
+    usable historical years.
     """
     if len(replays) < 3:
         return None
@@ -271,8 +272,9 @@ def pasw_plume_from_replays(replays, fallow_start, pctiles=(20, 80)):
     min_len = min(len(t) for t in traces)
     stacked = np.array([t[:min_len] for t in traces])
     low, high = np.percentile(stacked, pctiles, axis=0)
+    median = np.percentile(stacked, 50, axis=0)
     dates = pd.date_range(fallow_start, periods=min_len, freq="D")
-    return {"dates": dates, "low": low, "high": high, "n_years": len(replays)}
+    return {"dates": dates, "low": low, "high": high, "median": median, "n_years": len(replays)}
 
 
 def historical_pasw_plume(met_full, profile, fallow_start, plant_date, maturity_date,
