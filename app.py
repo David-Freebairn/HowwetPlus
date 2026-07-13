@@ -148,19 +148,30 @@ def make_pasw_chart(df, profile, plant_date, maturity_date, stn_name, start_date
 
     pawc = profile.pawc_total
 
-    # Shade the in-crop period
+    # Shade the in-crop period (visually self-evident — no legend entry)
     crop_end = min(pd.Timestamp(maturity_date), df.index.max())
-    ax.axvspan(pd.Timestamp(plant_date), crop_end,
-               color=C_CROP_SHADE, zorder=0, label="In-crop period")
+    ax.axvspan(pd.Timestamp(plant_date), crop_end, color=C_CROP_SHADE, zorder=0)
 
     if plume is not None:
-        ax.fill_between(plume["dates"], plume["low"], plume["high"],
-                         color=C_HIST, alpha=0.35, zorder=1,
-                         label=f"20\u201380%ile ({plume['n_years']} historical seasons)")
+        ax.fill_between(plume["dates"], plume["low"], plume["high"], color=C_HIST, alpha=0.35, zorder=1)
+        ax.plot(plume["dates"], plume["median"], color="#8FD3FE", lw=1.6, zorder=2)
+
+        # Anchor labels a little before the right edge (not at the very last
+        # point) and right-align them, so they sit inside the plot area
+        # rather than fighting the twin cover axis for space in the margin.
+        anchor_i = max(0, int(len(plume["dates"]) * 0.50) - 1)
+        anchor_x = plume["dates"][anchor_i]
+        ax.annotate("80%", xy=(anchor_x, plume["high"][anchor_i]), xytext=(0, 4), textcoords="offset points",
+                    fontsize=8, color="#5E7A99", va="bottom", ha="right")
+        ax.annotate("20%", xy=(anchor_x, plume["low"][anchor_i]), xytext=(0, -4), textcoords="offset points",
+                    fontsize=8, color="#5E7A99", va="top", ha="right")
+        ax.annotate("50%", xy=(anchor_x, plume["median"][anchor_i]), xytext=(0, 4), textcoords="offset points",
+                    fontsize=8, color="#4F9FD6", va="bottom", ha="right")
 
     ax.plot(df.index, df["pasw"], color=C_RECENT, lw=2.4, zorder=4, label="Plant available soil water")
-    ax.axhline(pawc, color="#CC4422", lw=0.9, ls="--", alpha=0.6, zorder=2,
-               label=f"PAWC  {pawc:.0f} mm")
+    ax.axhline(pawc, color="#CC4422", lw=0.9, ls="--", alpha=0.6, zorder=2)
+    ax.annotate(f"PAWC {pawc:.0f} mm", xy=(pd.Timestamp(start_date), pawc), xytext=(6, 4),
+                textcoords="offset points", fontsize=8, color="#CC4422", va="bottom", ha="left")
     ax.axvline(pd.Timestamp(plant_date), color="#2E7D32", lw=1.4, ls="-", alpha=0.8, zorder=3,
                label=f"Plant  {plant_date.strftime('%d %b %Y')}")
     ax.axvline(pd.Timestamp(maturity_date), color="#8a4b00", lw=1.2, ls="--", alpha=0.6, zorder=3,
@@ -190,9 +201,10 @@ def make_pasw_chart(df, profile, plant_date, maturity_date, stn_name, start_date
 
     lines1, labels1 = ax.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=9,
-              frameon=True, framealpha=0.9, edgecolor="#CCCCCC")
+    ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left", bbox_to_anchor=(0.0, 0.90),
+              fontsize=9, frameon=True, framealpha=0.9, edgecolor="#CCCCCC")
     plt.tight_layout(pad=1.5)
+    fig.subplots_adjust(right=0.90)
     return fig
 
 
