@@ -533,6 +533,7 @@ if st.session_state.get("result"):
 
     fig2 = make_et_chart(df, r["fallow_start"], r["maturity_date"])
     st.pyplot(fig2, width="stretch")
+    plt.close(fig2)
 
     with st.expander("📊 Water balance details"):
         fallow_df = df[df["phase"] == "fallow"]
@@ -583,3 +584,5 @@ if st.session_state.get("result"):
         )
     except Exception as e:
         st.warning(f"Couldn't build the report: {e}")
+    finally:
+        plt.close(fig)
