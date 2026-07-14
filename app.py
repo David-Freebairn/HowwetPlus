@@ -403,43 +403,53 @@ with d4:
 
 with st.expander("ℹ️ About this analysis"):
     st.markdown("""
-**Howwet+** tracks soil water through the current fallow and crop using weather records and water accounting to provide a simple picture of where we are now in relation to longer term performance.
-Select a nearby **location**, a **soil type** that best matches your situation and **dates: for start of fallow, planting and crop maturity**. This sets up your paddock to explore how the current seasons soil water store fits in with the longer term using long term daily weather data.
+**Howwet+** tracks soil water through a fallow and following crop using weather records and water accounting (rain, evaporation, runoff, drainage) to provide a picture of where we are now in relation to historic seasons (previous 30 years). 
+-	**Select a location** and soil type** from lists that best match your situation. It may take a minute to load climate data initially **(be patient please)**
+-	**Adjust  dates:** for **start of fallow, planting** and **crop maturity**. 
+-	Select **Run water balance** to updates each analysis. 
 
+Rather than focus on the values of soil water estimates, focus on where the soil water trace sits within the blue 20% - 80%ile plume and 50%ile (median) line.
 
-All inputs can be changed and **Run water balance** updates the analysis.
-Estimates of the current season are presented **Graphs** showing soil water, crop cover, evaporation and transpiration. The soil water trace can be compared to a plume of expectations for the worst 20% to the best 80% of the previous 30 years. 
+**Results** are presented as:
+-	**Graphs** showing soil water, crop cover, evaporation and transpiration.
+-	**Tables** of water balance components (soil water, evaporation, transpiration, runoff and deep drainage).
+-	**Export a report**  summarising each paddock’s soil water behaviour.
 
-**Tables** provide more detail on where rainfall goes (soil water, evaporation, transpiration, runoff and deep drainage.
+When inputs are edited, hit the **Run water balance** to updates results. 
 
-**A report** can be exported summarising each paddock’s soil water behaviour.
+**Assumptions**
+
+**Default values** are provided for most inputs but are easily modified to suit each paddocks condition. Hit the **Run water balance** button after any changes.
+**Stubble cover** is set to 30% throughout, reflecting an average condition. Bare soil paddocks will have reduced soil water and higher runoff.
+**Starting soil water** is assumed to be evenly distributed in the soil profile and set at 10%. Adjust if you have a better information but the results presented will still be valid as the most important indicator is where the current season sits in the longer-term expectations
 
 **Disclosure**
-
-This analysis have been developed based on previous experience in designing climate focused decision support tools using Anthropic’s Claude AI software This software was built to demonstrate value adding from long term weather data and well tested water balance models.
-Output from these analyses should be used for comparative purposes only – how does this season compare with the longer term.
+This analysis is based on experience in designing climate focused decision support tools and uses Anthropic’s Claude AI software. The aim is to demonstrate value adding using recent and long term weather data and well tested water balance models. Output from these analyses should be used for comparative purposes only – how does this season compare with the longer term?
 
 **Comments welcomed** David Freebairn: david.freebairn@gmail.com
 
 **Acknowledgements**
 
-**Weather data:** Queensland Government's SILO database sourced from the Bureau of Meteorology and the many voluntary weather recorders across the Australian continent since the 1890’s
-**Soil water ** estimates use a well-tested water balance model used in cropping system model models (PERFECT, Howwet? SoilWaterApp and ApSim)
-**App icon** generated using ChatGPT (GPT-5.5 image generation, OpenAI, 2026) from the developer’s design concept
+**Weather data:** Queensland Government's SILO database sourced from the Bureau of Meteorology and the many voluntary weather recorders across the Australian continent since the 1890’s 
+
+**Soil water ** estimates use a well-tested water balance model used in cropping system model models (PERFECT, Howwet? SoilWaterApp and ApSim).
+
+**App icon** generated using ChatGPT (GPT-5.5 image generation, OpenAI, 2026) from the developer’s design concept.
 
 **References**
 
-OpenAI. (2026). Howwet+ app icon [AI-generated image]. ChatGPT (GPT-5.5 with image generation). https://chat.openai.com
-
 Anthropic. (2026). Claude (Sonnet 4.6) [Large language model]. https://claude.ai
 
-Freebairn, D.M., Ghahramani, A., Robinson, J.B., and McClymont, D. (2018). A tool for monitoring soil water using modelling, on-farm data, and mobile technology Environmental Modelling & Software 104 (2018) 55e63 https://www.sciencedirect.com/science/article/pii/S1364815217312422 
+Freebairn, D.M., Ghahramani, A., Robinson, J.B., and McClymont, D. (2018). A tool for monitoring soil water using modelling, on-farm data, and mobile technology Environmental Modelling & Software 104 (2018) 55e63 https://www.sciencedirect.com/science/article/pii/S1364815217312422
 
-Freebairn, D.M., Hamilton, A.H., Cox, P.G. and Holzworth, D. (1994). HOWWET? Estimating the storage of water in your soil using rainfall records: A computer program. Agricultural Production Systems Research Unit, QDPI–CSIRO, Toowoomba, 
+Freebairn, D.M., Hamilton, A.H., Cox, P.G. and Holzworth, D. (1994). HOWWET? Estimating the storage of water in your soil using rainfall records: A computer program. Agricultural Production Systems Research Unit, QDPI–CSIRO, Toowoomba,
 
-Littleboy, M., Silburn, D.M., Freebairn, D.M., Woodruff, D.R. and Hammer, G.L. (1989). PERFECT: A simulation model of Productivity Erosion Runoff Functions to Evaluate Conservation Techniques. QDPI Bulletin QB89005. Queensland Department of Primary Industries, Brisbane, Australia. 
+Littleboy, M., Silburn, D.M., Freebairn, D.M., Woodruff, D.R. and Hammer, G.L. (1989). PERFECT: A simulation model of Productivity Erosion Runoff Functions to Evaluate Conservation Techniques. QDPI Bulletin QB89005. Queensland Department of Primary Industries, Brisbane, Australia.
 
 McCown, R.L., Hammer, G.L., Hargreaves, J.N.G., Holzworth, D. and Freebairn, D.M. (1996). APSIM: A novel software system for model development, model testing, and simulation in agricultural systems research. Agricultural Systems, 50, 255–271.
+
+OpenAI. (2026). Howwet+ app icon [AI-generated image]. ChatGPT (GPT-5.5 with image generation). https://chat.openai.com
+
 
 """)
 
