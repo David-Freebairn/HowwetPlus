@@ -5,9 +5,11 @@ continuously from a chosen fallow start date, through planting, and into
 crop transpiration — one bucket, no reset at planting, no reset at harvest.
 
 Built on the same PERFECT/HowLeaky-style water balance engine used in
-RiskAware/YieldRisk, with one new module (`core/cropwater.py`) that stitches
-a bare-fallow period and a crop growth period into a single daily run, plus
-a Streamlit front end (`app.py`) purpose-built for this app.
+RiskAware/YieldRisk, with new modules for this app: `core/cropwater.py`
+stitches a bare-fallow period and a crop growth period into a single daily
+run, `core/nitrogen.py` adds daily soil nitrogen mineralisation, and
+`core/yield_n.py` turns that into a target-yield nitrogen budget — plus a
+Streamlit front end (`app.py`) purpose-built for this app.
 
 ## What it does
 
@@ -15,18 +17,29 @@ a Streamlit front end (`app.py`) purpose-built for this app.
    / maturity date** and a starting soil water %.
 2. The app stretches a generic crop cover template to fit your exact
    plant → maturity window, runs one continuous daily water balance from
-   fallow start through to your assessment date (or maturity, whichever is
-   sooner — it never simulates past harvest), and shows:
+   fallow start through to yesterday (or maturity, whichever is sooner —
+   it never simulates past harvest and never runs ahead of available
+   climate data), and shows:
    - A soil water (PASW) chart with the crop cover curve overlaid on a
      right-hand axis, plus a 20–80%ile historical band built by replaying
      the same season shape across every year of climate record since 1995.
    - A soil evaporation / transpiration stack chart, same time axis.
+   - A nitrate mineralisation chart (gross fallow + in-crop N release,
+     with its own historical 20–80%ile band) and a **Yield & nitrogen
+     calculator** that scales a user-entered yield estimate across the
+     20/50/80%ile transpiration spread and budgets the nitrogen needed
+     against it. See `core/nitrogen.py` / `core/yield_n.py`.
    - Two water balance tables (Fallow, In-crop), each showing rainfall,
      runoff, soil evaporation, transpiration, drainage, and change in soil
      water — with a historical percentile column ranking each total
      against the replayed seasons.
 3. Download the daily results as CSV, or a Word report summarising the
-   inputs, both tables, and the chart.
+   inputs, both tables, both charts, and the yield/nitrogen budget.
+
+There's no separate "assessment date" control — the simulation always runs
+to the most recent day of available climate data (or to maturity, if
+maturity falls earlier). Earlier points in the season are just read
+straight off the charts/tables rather than needing a re-run.
 
 ## Repo layout
 
@@ -40,6 +53,10 @@ core/
   cover_excel.py          Reads crop cover Excel templates
   cropwater.py            Fallow→crop stitching, cover-curve stretching,
                           historical replay/percentiles (new for this app)
+  nitrogen.py             Daily N mineralisation (fallow + in-crop), ported
+                          from DHM's HowWetN engine — see module docstring
+                          for the licensing/attribution note
+  yield_n.py              Target-yield nitrogen budget calculator
   silo.py                 SILO station search + climate fetch/cache
   report.py               Word (.docx) report builder
 data/
@@ -49,11 +66,12 @@ data/
 .silo_cache/              Runtime climate cache (git-ignored)
 ```
 
-## Core engine (unchanged from RiskAware/YieldRisk)
+## Core engine (mostly unchanged from RiskAware/YieldRisk)
 
 - `core/soil.py`, `core/soil_xml.py` — soil profile readers
-- `core/waterbalance.py` — the daily water balance engine. No nitrogen or
-  yield code — that was never in here, so nothing needed stripping out.
+- `core/waterbalance.py` — the daily water balance engine itself. No
+  nitrogen or yield code in here — that lives in the two modules below,
+  layered on top of the engine's output rather than inside it.
   One real bug found and fixed along the way: `infiltrate_and_drain()` was
   silently discarding water that arrived faster than a layer's Ksat could
   pass it on (only shows up on soils with very low Ksat hit by large rain
@@ -67,6 +85,16 @@ data/
   are cleaned up once per app process at startup.
 - `core/cover_excel.py` — reads the "Cover data for Howleaky" Excel format
   (green cover %, residue %, root depth by day)
+- `core/nitrogen.py` — daily soil nitrogen mineralisation (gross release
+  only, no crop N-uptake term), ported from DHM Environmental Software
+  Engineering's HowWetN engine with permission — see the module docstring
+  for the full attribution/licensing note before reusing this file
+  elsewhere. New for this app; not part of the RiskAware/YieldRisk core.
+- `core/yield_n.py` — target-yield nitrogen budget calculator (the
+  "Dashboard final" workbook logic): scales a user-entered yield estimate
+  across the 20/50/80%ile historical transpiration spread, then budgets
+  the nitrogen needed against actual fallow mineralisation + median
+  in-crop mineralisation + starting N + fertiliser. New for this app.
 
 ## What's new: `core/cropwater.py`
 
@@ -82,9 +110,10 @@ data/
   daily loop: before `plant_date` → fixed bare cover (no roots, no green
   cover, fixed residue, zero transpiration); `plant_date` → `maturity_date`
   → the stretched crop template; simulation stops dead at `maturity_date`
-  even if the requested assessment date is later — it never runs a
-  post-harvest phase. Soil water carries through both transitions with no
-  reset.
+  even if more recent climate data exists — it never runs a post-harvest
+  phase. Soil water carries through both transitions with no reset. In
+  `app.py` this is always called with `end = min(yesterday, maturity_date)`
+  — there's no user-facing "assessment date" input to keep in sync.
 - **`replay_historical_seasons()` / `pasw_plume_from_replays()` /
   `historical_phase_percentiles()`** — replay the same fallow/plant/maturity
   month-day pattern across every year back to 1995 using that station's
@@ -116,9 +145,12 @@ Set as constants near the top of `app.py`:
 
 Templates use the same Excel layout `core/cover_excel.py` reads (`Main`
 sheet, header on row 3, columns `Day No`, `Green Cover %`, `Residue Cover %`,
-`Root Depth mm`, optional TUE/HI rows below — read but unused since this
-app doesn't do yield). Only one template is bundled (`data/generic_crop.xlsx`)
-and it's fixed, not user-selectable, in the current UI.
+`Root Depth mm`, optional TUE/HI rows below). Those TUE/HI rows are parsed
+into `CoverSchedule.tue` / `.hi` but not currently read by anything — the
+Yield & nitrogen calculator uses its own editable `TUE_KG_PER_MM` value in
+`app.py` (Diagnostics → Tuning constants) instead of the template's. Only
+one template is bundled (`data/generic_crop.xlsx`) and it's fixed, not
+user-selectable, in the current UI.
 
 ## Background climate prefetch
 
@@ -136,8 +168,9 @@ waits on that same thread rather than starting a second, redundant download.
 The "📄 Download report (Word)" button builds a `.docx` via `core/report.py`
 (using `python-docx`, since this runs inside the deployed app on demand,
 not generated ahead of time) with the run's inputs, both water balance
-tables (with historical percentiles), and the soil water chart exactly as
-shown in the app.
+tables (with historical percentiles), the soil water chart, and — when
+available — the nitrate mineralisation chart and the yield & nitrogen
+budget table, exactly as shown in the app.
 
 ## Running
 
