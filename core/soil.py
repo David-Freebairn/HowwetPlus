@@ -4,8 +4,7 @@ Parses .PRM files and sets up layer-by-layer water content arrays.
 """
 
 import numpy as np
-from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List
 
 
@@ -115,7 +114,6 @@ def read_prm(filepath):
     # Scalar parameters — read in order after horizon block
     # Find them by scanning for lines with a leading float
     scalar_lines = []
-    in_horizons = False
     found_horizons = 0
     for l in data_lines[2:]:
         parts = l.split()
@@ -134,11 +132,7 @@ def read_prm(filepath):
      musle_k, musle_p, slope_pct, slope_len, rill,
      bulk_density) = scalar_lines[:12]
 
-    # Cracking
-    crack_line = [l for l in data_lines if l.strip().lower().startswith(('y','n')) and
-                  'crack' not in l.lower()[:2]]
-    cracking_line = [l for l in lines if 'crack' in l.lower() and
-                     l.strip()[0].lower() in ('y','n')]
+    # Cracking — scan raw lines for a Y/N flag on a line mentioning "crack"
     cracking = False
     crack_infil = float(scalar_lines[12]) if len(scalar_lines) > 12 else 10.0
     for l in lines:
@@ -182,16 +176,3 @@ def init_sw(profile, fraction=0.5):
         for l in profile.layers
     ])
     return sw
-
-
-if __name__ == '__main__':
-    p = read_prm('/mnt/user-data/uploads/AVERRBE.PRM')
-    print(f"Soil: {p.name}")
-    print(f"Layers: {len(p.layers)}   Total depth: {p.total_depth} mm   PAWC: {p.pawc_total:.1f} mm")
-    print(f"CN2 bare: {p.cn2_bare}   Cona: {p.cona}   U: {p.u}")
-    for i, l in enumerate(p.layers):
-        print(f"  Layer {i+1}: {l.thickness:5.0f} mm thick  "
-              f"LL={l.ll*100:.1f}%  DUL={l.dul*100:.1f}%  SAT={l.sat*100:.1f}%  "
-              f"PAWC={l.pawc:.1f} mm")
-    sw0 = init_sw(p)
-    print(f"\nInitial SW (50% of PAWC): {sw0}  total={sw0.sum():.1f} mm")

@@ -228,8 +228,8 @@ def replay_historical_seasons(met_full: pd.DataFrame, profile, fallow_start, pla
     Shared by historical_pasw_plume() and historical_phase_percentiles() so
     the ~30 simulation runs only happen once per app "Run".
 
-    Returns a list of {'year': Y, 'df': df_y} dicts — one per historical year
-    with complete climate coverage for that replayed season.
+    Returns a list of {'year': Y, 'df': df_y, 'met': met_y} dicts — one per
+    historical year with complete climate coverage for that replayed season.
     """
     config = config or FallowCropConfig()
     yr0 = fallow_start.year
@@ -255,9 +255,27 @@ def replay_historical_seasons(met_full: pd.DataFrame, profile, fallow_start, pla
         except Exception:
             continue
 
-        replays.append({"year": y, "df": df_y})
+        replays.append({"year": y, "df": df_y, "met": met_y})
 
     return replays
+
+
+def transpiration_percentiles(replays, pctiles=(20, 50, 80)):
+    """
+    Total transpiration (mm) accumulated by maturity, for each historical
+    replayed season (fallow + in-crop — fallow contributes ~0 since green
+    cover is 0 there, so this is effectively cumulative in-crop
+    transpiration). Returns the requested percentiles of that
+    distribution — used to scale a target yield estimate across the
+    20/50/80%ile spread (Yield_p = Yield_50 * T_p / T_50), the same way
+    the "Dashboard final" workbook does it.
+
+    Returns None if fewer than 3 usable historical years.
+    """
+    if len(replays) < 3:
+        return None
+    totals = [float(r["df"]["transp"].sum()) for r in replays]
+    return {p: float(np.percentile(totals, p)) for p in pctiles}
 
 
 def pasw_plume_from_replays(replays, fallow_start, pctiles=(20, 80)):
@@ -277,29 +295,28 @@ def pasw_plume_from_replays(replays, fallow_start, pctiles=(20, 80)):
     return {"dates": dates, "low": low, "high": high, "median": median, "n_years": len(replays)}
 
 
-def historical_pasw_plume(met_full, profile, fallow_start, plant_date, maturity_date,
-                           cover_template, config=None, sw_init_frac=0.5, first_year=1995,
-                           pctiles=(20, 80)):
-    """Convenience wrapper: replay + plume in one call (see the two functions above)."""
-    replays = replay_historical_seasons(met_full, profile, fallow_start, plant_date, maturity_date,
-                                         cover_template, config=config, sw_init_frac=sw_init_frac,
-                                         first_year=first_year)
-    return pasw_plume_from_replays(replays, fallow_start, pctiles=pctiles)
+def transp_plume_from_replays(replays, fallow_start, pctiles=(20, 80)):
+    """
+    Build a day-by-day 20-80%ile (plus median) historical band for
+    CUMULATIVE transpiration, from replay_historical_seasons() output —
+    same approach as pasw_plume_from_replays(), just cumulative transp
+    instead of PASW. Diagnostic use: sanity-checks the transpiration
+    percentiles feeding the yield calculator's T20/T50/T80.
+
+    Returns None if fewer than 3 usable historical years.
+    """
+    if len(replays) < 3:
+        return None
+    traces = [r["df"]["transp"].cumsum().to_numpy() for r in replays]
+    min_len = min(len(t) for t in traces)
+    stacked = np.array([t[:min_len] for t in traces])
+    low, high = np.percentile(stacked, pctiles, axis=0)
+    median = np.percentile(stacked, 50, axis=0)
+    dates = pd.date_range(fallow_start, periods=min_len, freq="D")
+    return {"dates": dates, "low": low, "high": high, "median": median, "n_years": len(replays)}
 
 
 _COMPONENTS = ["rain", "runoff", "soil_evap", "transp", "drainage"]
-
-
-def phase_totals(df: pd.DataFrame, phase: str):
-    """Sum each water-balance component over rows matching `phase`, plus the
-    change in soil water across that slice. Returns None if the phase has no
-    rows in this df."""
-    sub = df[df["phase"] == phase]
-    if sub.empty:
-        return None
-    out = {c: float(sub[c].sum()) for c in _COMPONENTS}
-    out["dsw"] = float(sub["sw_total"].iloc[-1] - sub["sw_total"].iloc[0])
-    return out
 
 
 def historical_phase_percentiles(replays, fallow_days: int = None, crop_days: int = None):
@@ -347,32 +364,3 @@ def percentile_rank(current_value: float, historical_values):
         return None
     arr = np.asarray(historical_values, dtype=float)
     return float(100.0 * np.mean(arr <= current_value))
-
-
-def cover_preview(cover_template: CoverSchedule, plant_date, maturity_date,
-                   residue_cover: float = 0.30, lead_in_days: int = 30):
-    """
-    Cover-only preview (no soil, no climate) — just the stretched green
-    cover and root depth curve across plant_date -> maturity_date, with a
-    short bare lead-in for context. Total cover is derived from green cover
-    plus a constant residue_cover (same formula run_fallow_to_crop uses),
-    not read from the template's own residue column. Useful for
-    sanity-checking a template's stretch behaviour before wiring in a full
-    water balance run, matching the SeasonAware "Crop cover %" gauge.
-
-    Returns a DataFrame indexed by date with green_cover, total_cover,
-    root_depth (fractions/mm).
-    """
-    scaled  = stretch_cover_schedule(cover_template, plant_date, maturity_date)
-    lead_in = plant_date - pd.Timedelta(days=lead_in_days)
-    idx     = pd.date_range(lead_in, maturity_date, freq="D")
-    rows = []
-    for ts in idx:
-        d = ts.date()
-        if d < plant_date:
-            green, root = 0.0, 0.0
-        else:
-            green, _tmpl_total, root = get_cover_state(scaled, d.toordinal())
-        total = _total_cover(green, residue_cover)
-        rows.append({"date": ts, "green_cover": green, "total_cover": total, "root_depth": root})
-    return pd.DataFrame(rows).set_index("date")

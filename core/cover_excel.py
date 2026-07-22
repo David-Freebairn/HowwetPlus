@@ -137,7 +137,8 @@ def read_cover_excel(filepath, sheet_name='Main') -> CoverSchedule:
             except (IndexError, TypeError):
                 pass
 
-    print(f"  Cover schedule: {filepath.stem}  n_points={n_points}  "          f"TUE={tue_val:.1f} g/m²/mm  HI={hi_val:.2f}")
+    # (debug print removed — was useful for standalone script development,
+    # just noise in the deployed app's server logs)
 
     return CoverSchedule(
         name          = filepath.stem,
@@ -181,26 +182,3 @@ def cover_schedule_to_vege(schedule: CoverSchedule, out_path=None):
         df.to_csv(out_path, index=False)
         print(f"Saved: {out_path}")
     return df
-
-
-if __name__ == '__main__':
-    sch = read_cover_excel('/mnt/user-data/uploads/Cover_data_for_Howleaky.xlsx')
-
-    print(f"Name        : {sch.name}")
-    print(f"Source      : {sch.source_file}")
-    print(f"Breakpoints : {sch.n_points}")
-    print()
-    print(f"{'DOY':>5}  {'Green%':>7}  {'Residue%':>9}  {'Total%':>7}  {'Root mm':>8}")
-    print("-" * 45)
-    for i in range(len(sch.doy)):
-        print(f"{sch.doy[i]:>5}  {sch.green_cover[i]*100:>7.1f}  "
-              f"{sch.residue_cover[i]*100:>9.1f}  {sch.total_cover[i]*100:>7.1f}  "
-              f"{sch.root_depth[i]:>8.0f}")
-
-    print()
-    print("Sample interpolated values (mid-month):")
-    print(f"{'Month':<6} {'DOY':>4}  {'Green%':>7}  {'Total%':>7}  {'Root mm':>8}")
-    for m, d in zip(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-                    [15,  46,  74, 105, 135, 152, 182, 213, 244, 274, 305, 335]):
-        g, t, r = get_cover_state(sch, d)
-        print(f"{m:<6} {d:>4}  {g*100:>7.1f}  {t*100:>7.1f}  {r:>8.0f}")
