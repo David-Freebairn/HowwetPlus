@@ -32,10 +32,10 @@ from core.soil import read_prm
 from core.cover_excel import read_cover_excel
 from core.cropwater import (run_fallow_to_crop, replay_historical_seasons, pasw_plume_from_replays,
                              historical_phase_percentiles, percentile_rank, transpiration_percentiles,
-                             transp_plume_from_replays, FallowCropConfig)
+                             FallowCropConfig)
 from core.report import build_report_docx
 from core.nitrogen import n_mineralisation_gain, n_plume_from_replays, fallow_n_historical_values
-from core.yield_n import in_crop_n_median, yield_n_budget
+from core.yield_n import in_crop_n_median, yield_n_budget, Y20_SUGGESTED_MULTIPLIER, Y80_SUGGESTED_MULTIPLIER
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE / "data"
@@ -76,9 +76,10 @@ CROP_FACTOR   = 1.0
 # Yield & Nitrogen calculator defaults — per "Dashboard final" workbook note
 # ("Default values (add top of .py file)"). TUE currently only used to
 # suggest a starting yield estimate; NUE grosses up N required from grain N.
-# Bumped by hand whenever a change ships — shown in the Diagnostics panel so
-# you can confirm a deployed instance is actually running the latest push.
-APP_VERSION = "2026-07-17"
+# Bumped by hand whenever a change ships — shown top-right next to "About"
+# (and in the Diagnostics panel) so you can confirm a deployed instance is
+# actually running the latest push. Keep this current on every change.
+APP_VERSION = "2026-07-23"
 
 TUE_KG_PER_MM = 20.0   # transpiration use efficiency, kg grain / mm transpired — default suggestion only, editable live in the calculator
 NUE_PCT       = 50.0   # nitrogen use efficiency (%) — default suggestion only, editable live in the calculator
@@ -93,32 +94,34 @@ DEFAULT_START_SOIL_WATER_PCT = 10     # % of PAWC
 DEFAULT_PROTEIN_PCT          = 13.0   # %
 DEFAULT_START_N              = 10.0   # kg N/ha, soil test or estimate
 DEFAULT_FERT_N               = 0.0    # kg N/ha
+DEFAULT_GRAIN_PRICE          = 300.0  # $/tonne, net return
+DEFAULT_FERT_COST_PER_KGN    = 2.0    # $/kg N
 
 ABOUT_TEXT = """
 **Howwet+** tracks soil water and nitrogen mineralisation through a fallow and following crop using weather records, daily water balance accounting (rain, evaporation, runoff, drainage) to provide an estimate of where we are now in relation to past seasons (since 1995). 
 
 To get started:
 
--	**Select a location** and **soil type** that best match your situation. It may **take a minute** to load climate data initially **(please be patient)**
--	**Adjust dates:** for **start of fallow, planting** and **crop maturity**. 
+-	**Select a location** and **soil type** that best match your situation. It may **take a minute** to load climate data initially.
+-	**Adjust dates:** for **start of fallow, planting and crop maturity**. 
 -	Select **Run water balance** to updates each analysis. 
+-	After soil water and nitrogen accumulations are estimated a **Yield & nitrogen calculator** requires **inputs or updates** for average, lowest (20%ile) and highest (80%ile) **yields, target protein, soil test or start N level, fertiliser rates and simple grain and nitrogen costs**. This table is **interactive**.
 
 Rather than focus on values of soil water and NO3 mineralisation estimates, **focus on where each trace sits** within the blue 20% - 80%ile plume and 50%ile (median) line.
 
 **Results** are presented as:
--	**A graph** showing **soil water** for the current season in relation to a plume that describes the years between the 1in 5 driest and 1 in 5 wettest years. Crop cover is shown once a crop starts.
--	**A graph** showing **nitrate mineralisation** like the soil water graph above it.
--	A **Nitrogen budget table** with average yield, target protein, soil nitrogen test results and fertiliser rates **inputs**. This table is **interactive**.
+-	A **soil water graph** for the current season in relation to the median and a blue ‘plume’ including the driest to the wettest 1 in 5 years. Crop cover is shown after planting.
+-	A **nitrate mineralisation graph** with cumulative nitrate over the fallow and crop period.
+-	An **interactive Yield & nitrogen calculator** to facilitate exploring interactions between seasonal outlooks, grain and fertiliser prices. The last values in this table also are reported in the exported summary document.
 -	**Water balance details** tab summarising rainfall, evaporation, transpiration, runoff, deep drainage and soil water changes
 -	**Download report** button provides a MSWord document summarising soil water and nitrogen behaviour.
--	A **Diagnostics** tab is available to explore further detail in the models used (**not recommended**).
-When inputs are edited, hit the **Run water balance** to updates results. 
+-	A **Diagnostics** tab provides further detail on some model outputs (E, T, surface moisture and temperature).
 
 **Assumptions**
 
-**Default values** provided for most inputs but are easily modified to suit each paddocks. Hit the **Run water balance** button after changes.
-**Stubble cover** is set to 30% throughout, reflecting an average condition. Bare soil paddocks will have reduced soil water and higher runoff.
-**Starting soil water** is evenly distributed in the soil profile and set at 10%. **Adjust** if you have a better information. The most important indicator is where the **current season sits within longer-term conditions**.This is, is this season better or worse?
+**Default values** are provided for most inputs but can be edited to suit paddock conditions. Hit the **Run water balance** button after changes.
+**Stubble cover** is set to 30% throughout fallows and crops, reflecting an average condition. Bare soil paddocks will have reduced soil water and higher runoff.
+**Starting soil water** is evenly distributed in the soil profile and set at 10%. **Adjust** if you have a better information. The most important indicator is where the **current season sits within longer-term conditions**.That is, is this season better or worse, providing a basis for changing expectations and potentially inputs?
 
 **Comments welcomed** David Freebairn: david.freebairn@gmail.com
 
@@ -130,15 +133,13 @@ This app aims to demonstrate value adding using recent and long term weather dat
 
 **Weather data:** Queensland Government's SILO database sourced from the Bureau of Meteorology and the many voluntary weather recorders across the Australian continent since the 1890’s 
 
-**Soil water ** estimates use a well-tested water balance model used in cropping system model models (PERFECT, Howwet? SoilWaterApp and ApSim).
+**Soil water** estimates use a well-tested water balance model used in cropping system models such as PERFECT, Howwet? SoilWaterApp and ApSim.
 
 **App icon** generated using ChatGPT (GPT-5.5 image generation, OpenAI, 2026) from the developer’s design concept.
 
 **References**
 
 Anthropic. (2026). Claude (Sonnet 4.6) [Large language model]. https://claude.ai
-
-ChatGPT (GPT-5.5 image generation, OpenAI, 2026).
 
 Freebairn, D.M., Ghahramani, A., Robinson, J.B., and McClymont, D. (2018). A tool for monitoring soil water using modelling, on-farm data, and mobile technology Environmental Modelling & Software 104 (2018) 55e63 https://www.sciencedirect.com/science/article/pii/S1364815217312422
 
@@ -504,48 +505,6 @@ def make_n_factors_chart(ng: pd.DataFrame, fallow_start, maturity_date):
     return fig
 
 
-def make_transp_chart(df: pd.DataFrame, plant_date, maturity_date, fallow_start, transp_plume=None):
-    fig, ax = plt.subplots(figsize=(12, 4.2))
-    cum_transp = df["transp"].cumsum()
-
-    if transp_plume is not None:
-        ax.fill_between(transp_plume["dates"], transp_plume["low"], transp_plume["high"],
-                         color=C_HIST, alpha=0.35, zorder=1)
-        ax.plot(transp_plume["dates"], transp_plume["median"], color="#8FD3FE", lw=1.6, zorder=2)
-        anchor_i = max(0, int(len(transp_plume["dates"]) * 0.50) - 1)
-        anchor_x = transp_plume["dates"][anchor_i]
-        ax.annotate("80%", xy=(anchor_x, transp_plume["high"][anchor_i]), xytext=(0, 4), textcoords="offset points",
-                    fontsize=8, color="#5E7A99", va="bottom", ha="right")
-        ax.annotate("20%", xy=(anchor_x, transp_plume["low"][anchor_i]), xytext=(0, -4), textcoords="offset points",
-                    fontsize=8, color="#5E7A99", va="top", ha="right")
-        ax.annotate("50%", xy=(anchor_x, transp_plume["median"][anchor_i]), xytext=(0, 4), textcoords="offset points",
-                    fontsize=8, color="#4F9FD6", va="bottom", ha="right")
-
-    ax.plot(df.index, cum_transp, color="#3E8E5A", lw=2.4, zorder=4)
-    ax.annotate("Transpiration", xy=(df.index[int(len(df) * 0.5)], cum_transp.iloc[int(len(df) * 0.5)]),
-                xytext=(0, 8), textcoords="offset points", fontsize=8.5, color="#2C6B43",
-                va="bottom", ha="center", fontweight="bold")
-
-    ax.axvline(pd.Timestamp(plant_date), color="#2E7D32", lw=1.4, ls="-", alpha=0.8, zorder=3,
-               label=f"Plant  {plant_date.strftime('%d %b %Y')}")
-    ax.axvline(pd.Timestamp(maturity_date), color="#8a4b00", lw=1.2, ls="--", alpha=0.6, zorder=3,
-               label=f"Maturity  {maturity_date.strftime('%d %b %Y')}")
-
-    ax.set_ylabel("Cumulative transpiration (mm)", fontsize=9.5, color="#2C6B43")
-    ax.set_ylim(bottom=0)
-    ax.tick_params(axis="y", labelsize=8.5, colors="#2C6B43")
-    ax.tick_params(axis="x", labelsize=8.5)
-    ax.xaxis.set_major_locator(mdates.MonthLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b\n%Y"))
-    ax.set_xlim(pd.Timestamp(fallow_start), pd.Timestamp(maturity_date))
-    ax.grid(axis="y", color="#E0E4EC", lw=0.6, zorder=0)
-    ax.spines["top"].set_visible(False)
-    ax.legend(loc="upper left", fontsize=9, frameon=True, framealpha=0.9, edgecolor="#CCCCCC")
-
-    plt.tight_layout(pad=1.2)
-    return fig
-
-
 def water_balance_table_md(sub_df: pd.DataFrame, hist_phase: dict = None, extra_row=None):
     if sub_df is None or sub_df.empty:
         return None
@@ -609,9 +568,9 @@ caption_col, about_col = st.columns([8, 1], vertical_alignment="top")
 with caption_col:
     st.caption("*Following soil water and nitrate mineralisation – from fallow start to crop maturity*")
 with about_col:
+    st.caption(f"v{APP_VERSION}")
     with st.popover("ℹ️ About"):
         st.markdown(ABOUT_TEXT)
-st.caption(f"v{APP_VERSION}")
 
 soil_files = load_soil_files()
 today      = date.today()
@@ -797,6 +756,9 @@ elif auto_run and not run_clicked:
 if (run_clicked or auto_run) and not missing:
     st.session_state["last_run_signature"] = input_signature
     st.session_state.pop("avg_yield", None)   # let the yield suggestion re-derive from current TUE/T50 on this fresh run
+    st.session_state.pop("y20_yield", None)
+    st.session_state.pop("y80_yield", None)
+    st.session_state.pop("_prev_avg_yield", None)
     try:
         profile = load_profile(soil_path)
         profile.n_mineralisation_coefficient = mineral_coeff_override
@@ -896,14 +858,12 @@ if (run_clicked or auto_run) and not missing:
         n_gain = n_mineralisation_gain(df, profile, met)
         n_plume = n_plume_from_replays(replays, profile, fallow_start)
         t_pct = transpiration_percentiles(replays)
-        transp_plume = transp_plume_from_replays(replays, fallow_start)
         in_crop_n_est = in_crop_n_median(replays, profile)
         fallow_n_hist = fallow_n_historical_values(replays, profile)
     except Exception as e:
         n_gain = None
         n_plume = None
         t_pct = None
-        transp_plume = None
         in_crop_n_est = None
         fallow_n_hist = []
         diag["nitrogen_error"] = str(e)
@@ -914,7 +874,7 @@ if (run_clicked or auto_run) and not missing:
         "fallow_start": fallow_start, "plant_date": plant_date,
         "maturity_date": maturity_date, "sim_end": sim_end,
         "plume": plume, "hist_pct": hist_pct, "n_gain": n_gain, "n_plume": n_plume,
-        "t_pct": t_pct, "in_crop_n_est": in_crop_n_est, "fallow_n_hist": fallow_n_hist, "transp_plume": transp_plume,
+        "t_pct": t_pct, "in_crop_n_est": in_crop_n_est, "fallow_n_hist": fallow_n_hist,
         "diag": diag, "pasw_at_plant_hist": pasw_at_plant_hist,
     }
 
@@ -1032,38 +992,84 @@ if st.session_state.get("result"):
             nue_live = st.session_state.get("nue_live", NUE_PCT)
 
             st.markdown("**Yield & nitrogen calculator**")
-            st.caption("A provisional yield estimate provided to demonstrate calculator function. Update with your estimate.")
-            yc1, yc2, yc3, yc4 = st.columns(4)
+            st.caption(
+                "A provisional yield estimate provided to demonstrate calculator function \u2014 update with local "
+                "\u201clowest likely (Y20%ile)\u201d and \u201chighest likely (Y80%ile)\u201d values. The app "
+                "considers nitrogen in relation to water storage estimated above and is simplistic as many other "
+                "factors influence yield potential and nitrogen supply and demand (previous crop, carryover N, "
+                "frost, heat, disease, waterlogging)."
+            )
+            yc1, yc2, yc3 = st.columns(3)
             with yc1:
                 default_yield = round(tue_live * t_pct[50] / 1000.0, 1)
-                avg_yield = st.number_input("Average grain yield (t/ha)", min_value=0.0, max_value=20.0,
+                avg_yield = st.number_input("Mean/median grain yield (t/ha)", min_value=0.0, max_value=20.0,
                                              value=default_yield, step=0.1, format="%.1f", key="avg_yield")
             with yc2:
+                # Y20/Y80 default to Y20_SUGGESTED_MULTIPLIER/Y80_SUGGESTED_MULTIPLIER x
+                # avg_yield until the grower sets their own — same
+                # "follow-until-customised" pattern as maturity_date above:
+                # only re-suggest when avg_yield has actually moved since
+                # last time, so a manually-entered Y20/Y80 isn't clobbered
+                # on every rerun.
+                prev_avg_yield = st.session_state.get("_prev_avg_yield")
+                suggested_y20 = round(avg_yield * Y20_SUGGESTED_MULTIPLIER, 1)
+                if "y20_yield" not in st.session_state:
+                    st.session_state["y20_yield"] = suggested_y20
+                elif prev_avg_yield is not None and prev_avg_yield != avg_yield:
+                    prev_suggested_y20 = round(prev_avg_yield * Y20_SUGGESTED_MULTIPLIER, 1)
+                    if st.session_state["y20_yield"] == prev_suggested_y20:
+                        st.session_state["y20_yield"] = suggested_y20
+                y20_yield = st.number_input("Yield \u2014 lowest likely (1:5) (t/ha)", min_value=0.0, max_value=20.0,
+                                             step=0.1, format="%.1f", key="y20_yield")
+            with yc3:
+                suggested_y80 = round(avg_yield * Y80_SUGGESTED_MULTIPLIER, 1)
+                if "y80_yield" not in st.session_state:
+                    st.session_state["y80_yield"] = suggested_y80
+                elif prev_avg_yield is not None and prev_avg_yield != avg_yield:
+                    prev_suggested_y80 = round(prev_avg_yield * Y80_SUGGESTED_MULTIPLIER, 1)
+                    if st.session_state["y80_yield"] == prev_suggested_y80:
+                        st.session_state["y80_yield"] = suggested_y80
+                y80_yield = st.number_input("Yield \u2014 highest likely (1:5) (t/ha)", min_value=0.0, max_value=20.0,
+                                             step=0.1, format="%.1f", key="y80_yield")
+            st.session_state["_prev_avg_yield"] = avg_yield
+
+            yc4, yc5, yc6 = st.columns(3)
+            with yc4:
                 protein_pct = st.number_input("Protein target (%)", min_value=5.0, max_value=20.0,
                                                value=DEFAULT_PROTEIN_PCT, step=0.5, format="%.1f", key="protein_pct")
-            with yc3:
+            with yc5:
                 start_n = st.number_input("Soil test or start N (kg N/ha)", min_value=0.0, max_value=300.0,
                                            value=DEFAULT_START_N, step=5.0, format="%.0f", key="start_n")
-            with yc4:
+            with yc6:
                 fert_n = st.number_input("Fertiliser applied (kg N/ha)", min_value=0.0, max_value=400.0,
                                           value=DEFAULT_FERT_N, step=5.0, format="%.0f", key="fert_n")
 
-            budget = yield_n_budget(avg_yield, protein_pct, start_n, fert_n,
-                                     fallow_n_actual, in_crop_n_est,
-                                     t_pct[20], t_pct[50], t_pct[80], nue_pct=nue_live)
+            yc7, yc8 = st.columns(2)
+            with yc7:
+                grain_price = st.number_input("Grain net return ($/tonne)", min_value=0.0, max_value=2000.0,
+                                               value=DEFAULT_GRAIN_PRICE, step=10.0, format="%.0f", key="grain_price")
+            with yc8:
+                fert_cost = st.number_input("Fertiliser cost ($/kg N)", min_value=0.0, max_value=20.0,
+                                             value=DEFAULT_FERT_COST_PER_KGN, step=0.1, format="%.1f", key="fert_cost")
+
+            budget = yield_n_budget(y20_yield, avg_yield, y80_yield, protein_pct, start_n, fert_n,
+                                     fallow_n_actual, in_crop_n_est, nue_pct=nue_live,
+                                     grain_price=grain_price, fert_cost_per_kgn=fert_cost)
 
             st.markdown(f"""
 | | 20%ile | 50%ile | 80%ile |
 |---|---:|---:|---:|
-| Estimated water-limited yield (t/ha) | {budget[20]['yield_t_ha']:.1f} | {budget[50]['yield_t_ha']:.1f} | {budget[80]['yield_t_ha']:.1f} |
+| Estimated yield (t/ha) | {budget[20]['yield_t_ha']:.1f} | {budget[50]['yield_t_ha']:.1f} | {budget[80]['yield_t_ha']:.1f} |
 | Nitrogen required (kg N/ha) | {budget[20]['n_required']:.0f} | {budget[50]['n_required']:.0f} | {budget[80]['n_required']:.0f} |
 | Nitrogen supply (kg N/ha) | {budget[20]['n_supply']:.0f} | {budget[50]['n_supply']:.0f} | {budget[80]['n_supply']:.0f} |
 | **Nitrogen deficit/surplus (kg N/ha)** | {budget[20]['n_balance']:+.0f} | {budget[50]['n_balance']:+.0f} | {budget[80]['n_balance']:+.0f} |
+| Grain return ($/ha) | {budget[20]['grain_return']:.0f} | {budget[50]['grain_return']:.0f} | {budget[80]['grain_return']:.0f} |
+| Extra fertiliser cost to fulfil yield potential ($/ha) | {budget[20]['extra_fert_cost']:.0f} | {budget[50]['extra_fert_cost']:.0f} | {budget[80]['extra_fert_cost']:.0f} |
 """)
             st.caption(
-                f"\u2139\ufe0f Yield 20%ile and 80%iles values based on the 50%ile value and scaled using "
-                f"historical transpiration values at maturity (T20={t_pct[20]:.0f} mm, T50={t_pct[50]:.0f} mm, "
-                f"T80={t_pct[80]:.0f} mm)."
+                f"\u2139\ufe0f Y20/Y80 suggested as {Y20_SUGGESTED_MULTIPLIER:.1f}x / {Y80_SUGGESTED_MULTIPLIER:.1f}x "
+                f"the mean/median yield \u2014 a rule of thumb, not a model output. Override with your own expected "
+                f"range for this paddock/season."
             )
             st.caption(
                 f"Nitrogen supply based on: current season fallow mineralisation ({fallow_n_actual:.0f} kg N/ha) "
@@ -1136,13 +1142,18 @@ if st.session_state.get("result"):
             tue_report = st.session_state.get("tue_live", TUE_KG_PER_MM)
             nue_report = st.session_state.get("nue_live", NUE_PCT)
             avg_yield_report = st.session_state.get("avg_yield", round(tue_report * t_pct_report[50] / 1000.0, 1))
+            y20_report = st.session_state.get("y20_yield", round(avg_yield_report * Y20_SUGGESTED_MULTIPLIER, 1))
+            y80_report = st.session_state.get("y80_yield", round(avg_yield_report * Y80_SUGGESTED_MULTIPLIER, 1))
             protein_report = st.session_state.get("protein_pct", DEFAULT_PROTEIN_PCT)
             start_n_report = st.session_state.get("start_n", DEFAULT_START_N)
             fert_n_report = st.session_state.get("fert_n", DEFAULT_FERT_N)
-            budget_report = yield_n_budget(avg_yield_report, protein_report, start_n_report, fert_n_report,
+            grain_price_report = st.session_state.get("grain_price", DEFAULT_GRAIN_PRICE)
+            fert_cost_report = st.session_state.get("fert_cost", DEFAULT_FERT_COST_PER_KGN)
+            budget_report = yield_n_budget(y20_report, avg_yield_report, y80_report,
+                                            protein_report, start_n_report, fert_n_report,
                                             fallow_n_actual_val, in_crop_n_est_report,
-                                            t_pct_report[20], t_pct_report[50], t_pct_report[80],
-                                            nue_pct=nue_report)
+                                            nue_pct=nue_report,
+                                            grain_price=grain_price_report, fert_cost_per_kgn=fert_cost_report)
 
         n_chart_png = None
         if n_gain_report is not None and not n_gain_report.empty:
@@ -1207,15 +1218,6 @@ if st.session_state.get("result"):
             st.error(f"Historical replay (soil water plume) failed internally: {diag['replay_error']}")
         if diag.get("nitrogen_error"):
             st.error(f"Nitrogen/yield calculations failed internally: {diag['nitrogen_error']}")
-
-        transp_plume_r = r.get("transp_plume")
-        st.markdown("**Transpiration** *(sanity-check for the yield calculator's T20/T50/T80)*")
-        fig_transp = make_transp_chart(df, r["plant_date"], r["maturity_date"], r["fallow_start"],
-                                        transp_plume=transp_plume_r)
-        st.pyplot(fig_transp, width="stretch")
-        plt.close(fig_transp)
-        if transp_plume_r is None:
-            st.caption("ℹ️ Not enough historical seasons with full climate coverage since 1995 to build a 20–80%ile band here.")
 
         st.markdown("**Soil evaporation / transpiration split**")
         fig_et = make_et_chart(df, r["fallow_start"], r["maturity_date"])

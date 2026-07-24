@@ -26,9 +26,12 @@ Streamlit front end (`app.py`) purpose-built for this app.
    - A soil evaporation / transpiration stack chart, same time axis.
    - A nitrate mineralisation chart (gross fallow + in-crop N release,
      with its own historical 20–80%ile band) and a **Yield & nitrogen
-     calculator** that scales a user-entered yield estimate across the
-     20/50/80%ile transpiration spread and budgets the nitrogen needed
-     against it. See `core/nitrogen.py` / `core/yield_n.py`.
+     calculator**: the grower enters their own mean/median yield estimate
+     plus their own Y20 ("lowest likely") and Y80 ("highest likely")
+     figures — suggested as 0.6x/1.5x the mean as a starting point, fully
+     overridable — and the app budgets the nitrogen needed against each,
+     plus the $/ha grain return and any extra fertiliser cost to close a
+     deficit. See `core/nitrogen.py` / `core/yield_n.py`.
    - Two water balance tables (Fallow, In-crop), each showing rainfall,
      runoff, soil evaporation, transpiration, drainage, and change in soil
      water — with a historical percentile column ranking each total
@@ -90,11 +93,17 @@ data/
   Engineering's HowWetN engine with permission — see the module docstring
   for the full attribution/licensing note before reusing this file
   elsewhere. New for this app; not part of the RiskAware/YieldRisk core.
-- `core/yield_n.py` — target-yield nitrogen budget calculator (the
-  "Dashboard final" workbook logic): scales a user-entered yield estimate
-  across the 20/50/80%ile historical transpiration spread, then budgets
-  the nitrogen needed against actual fallow mineralisation + median
-  in-crop mineralisation + starting N + fertiliser. New for this app.
+- `core/yield_n.py` — target-yield nitrogen budget calculator (replicates
+  the "Howwet+ N calculations" workbook, `N_budget.xlsx`): the grower
+  supplies their own Y20/Y50/Y80 yield estimates directly (Y20/Y80
+  suggested as 0.6x/1.5x the mean, overridable — deliberately *not*
+  derived from the water balance's own transpiration percentiles, which
+  came out narrower than real yield variability; see the module
+  docstring), then budgets the nitrogen needed against actual fallow
+  mineralisation + median in-crop mineralisation + starting N +
+  fertiliser, plus an optional $/ha economic bottom line (grain return,
+  extra fertiliser cost to close a deficit) when a grain price and
+  fertiliser cost are given. New for this app.
 
 ## What's new: `core/cropwater.py`
 
