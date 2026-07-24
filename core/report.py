@@ -195,7 +195,7 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
             for i, v in enumerate(vals):
                 row[i + 1].text = v
 
-        _row("Estimated water-limited yield (t/ha)",
+        _row("Estimated yield (t/ha)",
              [f"{budget[p]['yield_t_ha']:.1f}" for p in (20, 50, 80)])
         _row("Nitrogen required (kg N/ha)",
              [f"{budget[p]['n_required']:.0f}" for p in (20, 50, 80)])
@@ -203,6 +203,11 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
              [f"{budget[p]['n_supply']:.0f}" for p in (20, 50, 80)])
         _row("Nitrogen deficit/surplus (kg N/ha)",
              [f"{budget[p]['n_balance']:+.0f}" for p in (20, 50, 80)])
+        if all("grain_return" in budget[p] for p in (20, 50, 80)):
+            _row("Grain return ($/ha)",
+                 [f"{budget[p]['grain_return']:.0f}" for p in (20, 50, 80)])
+            _row("Extra fertiliser cost to fulfil yield potential ($/ha)",
+                 [f"{budget[p]['extra_fert_cost']:.0f}" for p in (20, 50, 80)])
 
     buf = io.BytesIO()
     doc.save(buf)
