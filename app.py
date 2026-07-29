@@ -35,7 +35,8 @@ from core.cropwater import (run_fallow_to_crop, replay_historical_seasons, pasw_
                              FallowCropConfig)
 from core.report import build_report_docx
 from core.nitrogen import n_mineralisation_gain, n_plume_from_replays, fallow_n_historical_values
-from core.yield_n import in_crop_n_median, yield_n_budget, Y20_SUGGESTED_MULTIPLIER, Y80_SUGGESTED_MULTIPLIER
+from core.yield_n import (in_crop_n_median, yield_n_budget, fallow_mineralisation_rating,
+                           Y20_SUGGESTED_MULTIPLIER, Y80_SUGGESTED_MULTIPLIER)
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE / "data"
@@ -79,7 +80,7 @@ CROP_FACTOR   = 1.0
 # Bumped by hand whenever a change ships — shown top-right next to "About"
 # (and in the Diagnostics panel) so you can confirm a deployed instance is
 # actually running the latest push. Keep this current on every change.
-APP_VERSION = "2026-07-23"
+APP_VERSION = "2026-07-29"
 
 TUE_KG_PER_MM = 20.0   # transpiration use efficiency, kg grain / mm transpired — default suggestion only, editable live in the calculator
 NUE_PCT       = 50.0   # nitrogen use efficiency (%) — default suggestion only, editable live in the calculator
@@ -105,14 +106,14 @@ To get started:
 -	**Select a location** and **soil type** that best match your situation. It may **take a minute** to load climate data initially.
 -	**Adjust dates:** for **start of fallow, planting and crop maturity**. 
 -	Select **Run water balance** to updates each analysis. 
--	After soil water and nitrogen accumulations are estimated a **Yield & nitrogen calculator** requires **inputs or updates** for average, lowest (20%ile) and highest (80%ile) **yields, target protein, soil test or start N level, fertiliser rates and simple grain and nitrogen costs**. This table is **interactive**.
+-	After soil water and nitrogen accumulations are estimated a **Nitrogen balance calculator** requires **inputs or updates** for average, lowest (20%ile) and highest (80%ile) **yields, target protein, soil test or start N level, fertiliser rates and simple grain and nitrogen costs**. This table is **interactive**.
 
 Rather than focus on values of soil water and NO3 mineralisation estimates, **focus on where each trace sits** within the blue 20% - 80%ile plume and 50%ile (median) line.
 
 **Results** are presented as:
 -	A **soil water graph** for the current season in relation to the median and a blue ‘plume’ including the driest to the wettest 1 in 5 years. Crop cover is shown after planting.
 -	A **nitrate mineralisation graph** with cumulative nitrate over the fallow and crop period.
--	An **interactive Yield & nitrogen calculator** to facilitate exploring interactions between seasonal outlooks, grain and fertiliser prices. The last values in this table also are reported in the exported summary document.
+-	An **interactive Nitrogen balance calculator** to facilitate exploring interactions between seasonal outlooks, grain and fertiliser prices. The last values in this table also are reported in the exported summary document.
 -	**Water balance details** tab summarising rainfall, evaporation, transpiration, runoff, deep drainage and soil water changes
 -	**Download report** button provides a MSWord document summarising soil water and nitrogen behaviour.
 -	A **Diagnostics** tab provides further detail on some model outputs (E, T, surface moisture and temperature).
@@ -133,7 +134,7 @@ This app aims to demonstrate value adding using recent and long term weather dat
 
 **Weather data:** Queensland Government's SILO database sourced from the Bureau of Meteorology and the many voluntary weather recorders across the Australian continent since the 1890’s 
 
-**Soil water** estimates use a well-tested water balance model used in cropping system models such as PERFECT, Howwet? SoilWaterApp and ApSim.
+**Soil water ** estimates use a well-tested water balance model used in cropping system models such as PERFECT, Howwet? SoilWaterApp and ApSim.
 
 **App icon** generated using ChatGPT (GPT-5.5 image generation, OpenAI, 2026) from the developer’s design concept.
 
@@ -755,10 +756,6 @@ elif auto_run and not run_clicked:
 
 if (run_clicked or auto_run) and not missing:
     st.session_state["last_run_signature"] = input_signature
-    st.session_state.pop("avg_yield", None)   # let the yield suggestion re-derive from current TUE/T50 on this fresh run
-    st.session_state.pop("y20_yield", None)
-    st.session_state.pop("y80_yield", None)
-    st.session_state.pop("_prev_avg_yield", None)
     try:
         profile = load_profile(soil_path)
         profile.n_mineralisation_coefficient = mineral_coeff_override
@@ -991,7 +988,7 @@ if st.session_state.get("result"):
             tue_live = st.session_state.get("tue_live", TUE_KG_PER_MM)
             nue_live = st.session_state.get("nue_live", NUE_PCT)
 
-            st.markdown("**Yield & nitrogen calculator**")
+            st.markdown("**Nitrogen balance calculator**")
             st.caption(
                 "A provisional yield estimate provided to demonstrate calculator function \u2014 update with local "
                 "\u201clowest likely (Y20%ile)\u201d and \u201chighest likely (Y80%ile)\u201d values. The app "
@@ -1000,11 +997,17 @@ if st.session_state.get("result"):
                 "frost, heat, disease, waterlogging)."
             )
             yc1, yc2, yc3 = st.columns(3)
-            with yc1:
-                default_yield = round(tue_live * t_pct[50] / 1000.0, 1)
-                avg_yield = st.number_input("Mean/median grain yield (t/ha)", min_value=0.0, max_value=20.0,
-                                             value=default_yield, step=0.1, format="%.1f", key="avg_yield")
             with yc2:
+                # Rendered first (even though it's the middle column) so its
+                # value is known before the Y20/Y80 suggestions below are
+                # computed — Streamlit places output by column regardless of
+                # call order, so this still lands in the centre visually.
+                # Boxed to visually anchor it against the 50%ile column below.
+                with st.container(border=True):
+                    default_yield = round(tue_live * t_pct[50] / 1000.0, 1)
+                    avg_yield = st.number_input("Mean/median grain yield (t/ha)", min_value=0.0, max_value=20.0,
+                                                 value=default_yield, step=0.1, format="%.1f", key="avg_yield")
+            with yc1:
                 # Y20/Y80 default to Y20_SUGGESTED_MULTIPLIER/Y80_SUGGESTED_MULTIPLIER x
                 # avg_yield until the grower sets their own — same
                 # "follow-until-customised" pattern as maturity_date above:
@@ -1038,7 +1041,7 @@ if st.session_state.get("result"):
                 protein_pct = st.number_input("Protein target (%)", min_value=5.0, max_value=20.0,
                                                value=DEFAULT_PROTEIN_PCT, step=0.5, format="%.1f", key="protein_pct")
             with yc5:
-                start_n = st.number_input("Soil test or start N (kg N/ha)", min_value=0.0, max_value=300.0,
+                start_n = st.number_input("Soil test (kgN/ha)", min_value=0.0, max_value=300.0,
                                            value=DEFAULT_START_N, step=5.0, format="%.0f", key="start_n")
             with yc6:
                 fert_n = st.number_input("Fertiliser applied (kg N/ha)", min_value=0.0, max_value=400.0,
@@ -1053,14 +1056,21 @@ if st.session_state.get("result"):
                                              value=DEFAULT_FERT_COST_PER_KGN, step=0.1, format="%.1f", key="fert_cost")
 
             budget = yield_n_budget(y20_yield, avg_yield, y80_yield, protein_pct, start_n, fert_n,
-                                     fallow_n_actual, in_crop_n_est, nue_pct=nue_live,
+                                     in_crop_n_est, nue_pct=nue_live,
                                      grain_price=grain_price, fert_cost_per_kgn=fert_cost)
 
+            fallow_n_hist_list = r.get("fallow_n_hist") or []
+            fallow_pctile = percentile_rank(fallow_n_actual, fallow_n_hist_list) if fallow_n_hist_list else None
+            fallow_rating = fallow_mineralisation_rating(fallow_pctile)
+            fallow_rating_str = fallow_rating if fallow_rating is not None else "n/a"
+
             st.markdown(f"""
-| | 20%ile | 50%ile | 80%ile |
+| | 20%ile | **50%ile** | 80%ile |
 |---|---:|---:|---:|
 | Estimated yield (t/ha) | {budget[20]['yield_t_ha']:.1f} | {budget[50]['yield_t_ha']:.1f} | {budget[80]['yield_t_ha']:.1f} |
 | Nitrogen required (kg N/ha) | {budget[20]['n_required']:.0f} | {budget[50]['n_required']:.0f} | {budget[80]['n_required']:.0f} |
+| Fallow mineralisation (relative to median) | | {fallow_rating_str} | |
+| In_crop mineralisation (kgN/ha) | | {in_crop_n_est:.0f} | |
 | Nitrogen supply (kg N/ha) | {budget[20]['n_supply']:.0f} | {budget[50]['n_supply']:.0f} | {budget[80]['n_supply']:.0f} |
 | **Nitrogen deficit/surplus (kg N/ha)** | {budget[20]['n_balance']:+.0f} | {budget[50]['n_balance']:+.0f} | {budget[80]['n_balance']:+.0f} |
 | Grain return ($/ha) | {budget[20]['grain_return']:.0f} | {budget[50]['grain_return']:.0f} | {budget[80]['grain_return']:.0f} |
@@ -1072,8 +1082,11 @@ if st.session_state.get("result"):
                 f"range for this paddock/season."
             )
             st.caption(
-                f"Nitrogen supply based on: current season fallow mineralisation ({fallow_n_actual:.0f} kg N/ha) "
-                f"+ soil test or start N + median in-crop mineralisation ({in_crop_n_est:.0f} kg N/ha)"
+                f"Nitrogen supply = soil test + fertiliser + median in-crop mineralisation ({in_crop_n_est:.0f} kg N/ha). "
+                f"This season's fallow mineralisation ({fallow_n_actual:.0f} kg N/ha, rated {fallow_rating_str.lower()} "
+                f"relative to the historical distribution) is shown for context only, not added to supply \u2014 a soil "
+                f"test taken after the fallow already reflects whatever mineralised over it, so adding both would "
+                f"double-count."
             )
         else:
             st.caption("ℹ️ Not enough historical seasons with full climate coverage since 1995 to run the yield & nitrogen calculator here.")
@@ -1151,7 +1164,7 @@ if st.session_state.get("result"):
             fert_cost_report = st.session_state.get("fert_cost", DEFAULT_FERT_COST_PER_KGN)
             budget_report = yield_n_budget(y20_report, avg_yield_report, y80_report,
                                             protein_report, start_n_report, fert_n_report,
-                                            fallow_n_actual_val, in_crop_n_est_report,
+                                            in_crop_n_est_report,
                                             nue_pct=nue_report,
                                             grain_price=grain_price_report, fert_cost_per_kgn=fert_cost_report)
 
@@ -1167,7 +1180,8 @@ if st.session_state.get("result"):
         report_bytes = build_report_docx(report_inputs, df, r.get("hist_pct"), r.get("plume"), chart_png,
                                           icon_path=REPORT_ICON_PATH if REPORT_ICON_PATH.exists() else None,
                                           fallow_n_actual=fallow_n_actual_val, fallow_n_hist=r.get("fallow_n_hist"),
-                                          n_chart_png=n_chart_png, budget=budget_report)
+                                          n_chart_png=n_chart_png, budget=budget_report,
+                                          in_crop_n_est=in_crop_n_est_report)
 
         st.download_button(
             "📄 Download report (Word)",
