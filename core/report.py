@@ -14,6 +14,8 @@ document generated at authoring time.
 import io
 from datetime import datetime
 
+from core.yield_n import fallow_mineralisation_rating
+
 
 _COMPONENT_ROWS = [
     ("Rainfall", "rain", "rain"),
@@ -90,7 +92,7 @@ def _add_water_balance_table(doc, title, sub_df, hist_phase, extra_row=None):
 
 def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: bytes,
                        icon_path=None, fallow_n_actual=None, fallow_n_hist=None,
-                       n_chart_png=None, budget=None) -> bytes:
+                       n_chart_png=None, budget=None, in_crop_n_est=None) -> bytes:
     """
     Parameters
     ----------
@@ -108,13 +110,18 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
                 total (kg/ha) — one value per historical replayed year —
                 from core.nitrogen.fallow_n_historical_values(). Adds a
                 "Gain in nitrate" row to the Fallow table with the current
-                season's actual value ranked against this distribution.
+                season's actual value ranked against this distribution,
+                and (qualitatively, low/average/high) a row in the
+                Nitrogen balance calculator table.
     n_chart_png : optional PNG bytes of the Nitrate mineralisation chart,
                 exactly as shown in-app. Adds a "Nitrate mineralisation"
                 section with this image when given.
     budget    : optional core.yield_n.yield_n_budget() output (dict keyed
-                20/50/80). Adds a "Yield & nitrogen calculator table"
+                20/50/80). Adds a "Nitrogen balance calculator table"
                 section when given.
+    in_crop_n_est : long-term median in-crop N mineralisation estimate
+                (kg N/ha) — shown as its own row in that table, above
+                "Nitrogen supply".
 
     Returns
     -------
@@ -152,12 +159,10 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
     hist_fallow = hist_pct["fallow"] if hist_pct else None
     hist_crop   = hist_pct["crop"] if hist_pct else None
 
+    fallow_pctile = _percentile_rank(fallow_n_actual, fallow_n_hist) if (fallow_n_actual is not None and fallow_n_hist) else None
     fallow_n_extra = None
     if fallow_n_actual is not None:
-        pctile_str = None
-        if fallow_n_hist:
-            p = _percentile_rank(fallow_n_actual, fallow_n_hist)
-            pctile_str = f"{p:.0f}th" if p is not None else None
+        pctile_str = f"{fallow_pctile:.0f}th" if fallow_pctile is not None else None
         fallow_n_extra = ("Gain in nitrate (kg/ha)", fallow_n_actual, pctile_str)
 
     _add_water_balance_table(doc, "Water balance \u2014 Fallow", fallow_df, hist_fallow, extra_row=fallow_n_extra)
@@ -180,18 +185,21 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
         doc.add_picture(io.BytesIO(n_chart_png), width=Inches(6.5))
 
     if budget:
-        doc.add_heading("Yield & nitrogen calculator table", level=2)
+        doc.add_heading("Nitrogen balance calculator table", level=2)
         table = doc.add_table(rows=1, cols=4)
         table.style = "Light Grid Accent 1"
         hdr = table.rows[0].cells
         hdr[0].text = ""
         hdr[1].text = "20%ile"
-        hdr[2].text = "50%ile"
+        hdr[2].paragraphs[0].add_run("50%ile").bold = True
         hdr[3].text = "80%ile"
 
-        def _row(label, vals):
+        def _row(label, vals, bold_label=False):
             row = table.add_row().cells
-            row[0].text = label
+            if bold_label:
+                row[0].paragraphs[0].add_run(label).bold = True
+            else:
+                row[0].text = label
             for i, v in enumerate(vals):
                 row[i + 1].text = v
 
@@ -199,10 +207,16 @@ def build_report_docx(inputs: dict, df, hist_pct: dict, plume: dict, chart_png: 
              [f"{budget[p]['yield_t_ha']:.1f}" for p in (20, 50, 80)])
         _row("Nitrogen required (kg N/ha)",
              [f"{budget[p]['n_required']:.0f}" for p in (20, 50, 80)])
+        fallow_rating = fallow_mineralisation_rating(fallow_pctile)
+        _row("Fallow mineralisation (relative to median)",
+             ["", fallow_rating if fallow_rating is not None else "n/a", ""])
+        if in_crop_n_est is not None:
+            _row("In_crop mineralisation (kgN/ha)",
+                 ["", f"{in_crop_n_est:.0f}", ""])
         _row("Nitrogen supply (kg N/ha)",
              [f"{budget[p]['n_supply']:.0f}" for p in (20, 50, 80)])
         _row("Nitrogen deficit/surplus (kg N/ha)",
-             [f"{budget[p]['n_balance']:+.0f}" for p in (20, 50, 80)])
+             [f"{budget[p]['n_balance']:+.0f}" for p in (20, 50, 80)], bold_label=True)
         if all("grain_return" in budget[p] for p in (20, 50, 80)):
             _row("Grain return ($/ha)",
                  [f"{budget[p]['grain_return']:.0f}" for p in (20, 50, 80)])

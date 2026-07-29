@@ -47,6 +47,24 @@ Y20_SUGGESTED_MULTIPLIER = 0.6
 Y80_SUGGESTED_MULTIPLIER = 1.5
 
 
+# Fallow mineralisation qualitative bands, relative to the historical
+# distribution for this paddock — informational only (see yield_n_budget
+# docstring for why this isn't a number added into the N budget).
+def fallow_mineralisation_rating(pctile):
+    """
+    Qualitative label for a fallow mineralisation percentile rank:
+    <30th %ile -> 'Low', 30-70th -> 'Average', >70th -> 'High'.
+    Returns None (caller should show 'n/a') if pctile is None.
+    """
+    if pctile is None:
+        return None
+    if pctile < 30:
+        return "Low"
+    if pctile > 70:
+        return "High"
+    return "Average"
+
+
 def in_crop_n_median(replays, profile, pctile=50):
     """
     Historical percentile (default: median) of N mineralised specifically
@@ -78,7 +96,7 @@ def in_crop_n_median(replays, profile, pctile=50):
 
 
 def yield_n_budget(y20, y50, y80, protein_pct, start_n, fert_n,
-                    fallow_n_actual, in_crop_n_est, nue_pct=50.0,
+                    in_crop_n_est, nue_pct=50.0,
                     grain_price=None, fert_cost_per_kgn=None):
     """
     Target-yield N budget across the 20/50/80%ile spread.
@@ -90,9 +108,6 @@ def yield_n_budget(y20, y50, y80, protein_pct, start_n, fert_n,
     protein_pct      : grain protein target (%)
     start_n          : starting mineral N, soil test or estimate (kg N/ha)
     fert_n           : fertiliser N applied (kg N/ha)
-    fallow_n_actual  : this season's actual fallow-phase N mineralisation
-                       (kg N/ha) — from n_mineralisation_gain() on the
-                       current run
     in_crop_n_est    : long-term median (or other pctile) in-crop N
                        mineralisation estimate (kg N/ha) — from
                        in_crop_n_median()
@@ -109,9 +124,17 @@ def yield_n_budget(y20, y50, y80, protein_pct, start_n, fert_n,
     'n_balance'} — n_balance positive means surplus, negative means
     deficit — plus 'grain_return' and 'extra_fert_cost' when grain_price
     and fert_cost_per_kgn are both given.
+
+    Note: this season's actual fallow-phase N mineralisation is
+    deliberately NOT added into n_supply here — a soil test taken after
+    the fallow (the usual case for start_n) already reflects whatever
+    mineralised over it, so summing both would double-count. Fallow
+    mineralisation is instead reported separately, as qualitative
+    context (low/average/high relative to the historical distribution)
+    rather than a number that feeds the budget.
     """
     yields = {20: y20, 50: y50, 80: y80}
-    n_supply = start_n + fallow_n_actual + in_crop_n_est + fert_n
+    n_supply = start_n + in_crop_n_est + fert_n
     do_economics = grain_price is not None and fert_cost_per_kgn is not None
 
     out = {}
