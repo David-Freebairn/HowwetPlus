@@ -106,14 +106,14 @@ To get started:
 -	**Select a location** and **soil type** that best match your situation. It may **take a minute** to load climate data initially.
 -	**Adjust dates:** for **start of fallow, planting and crop maturity**. 
 -	Select **Run water balance** to updates each analysis. 
--	After soil water and nitrogen accumulations are estimated a **Nitrogen balance calculator** requires **inputs or updates** for average, lowest (20%ile) and highest (80%ile) **yields, target protein, soil test or start N level, fertiliser rates and simple grain and nitrogen costs**. This table is **interactive**.
+-	After soil water and nitrogen accumulations are estimated a **Nitrogen balance calculator** requires **input or updated values** for: average, lowest (20%ile) and highest (80%ile) yield, protein target, N level from a soil test, fertiliser applied, grain nett return and nitrogen costs. This table is **interactive** with any changes reflected in N balance and N implications.
 
-Rather than focus on values of soil water and NO3 mineralisation estimates, **focus on where each trace sits** within the blue 20% - 80%ile plume and 50%ile (median) line.
+**Focus on where water and nitrogen traces for the current season sits** within the blue 20% - 80%ile plume and 50%ile (median) line.
 
 **Results** are presented as:
 -	A **soil water graph** for the current season in relation to the median and a blue ‘plume’ including the driest to the wettest 1 in 5 years. Crop cover is shown after planting.
 -	A **nitrate mineralisation graph** with cumulative nitrate over the fallow and crop period.
--	An **interactive Nitrogen balance calculator** to facilitate exploring interactions between seasonal outlooks, grain and fertiliser prices. The last values in this table also are reported in the exported summary document.
+-	An **interactive Yield & nitrogen calculator** to facilitate exploring interactions between seasonal outlooks, grain and fertiliser prices. The last values in this table also are reported in the exported summary document.
 -	**Water balance details** tab summarising rainfall, evaporation, transpiration, runoff, deep drainage and soil water changes
 -	**Download report** button provides a MSWord document summarising soil water and nitrogen behaviour.
 -	A **Diagnostics** tab provides further detail on some model outputs (E, T, surface moisture and temperature).
@@ -121,20 +121,20 @@ Rather than focus on values of soil water and NO3 mineralisation estimates, **fo
 **Assumptions**
 
 **Default values** are provided for most inputs but can be edited to suit paddock conditions. Hit the **Run water balance** button after changes.
-**Stubble cover** is set to 30% throughout fallows and crops, reflecting an average condition. Bare soil paddocks will have reduced soil water and higher runoff.
-**Starting soil water** is evenly distributed in the soil profile and set at 10%. **Adjust** if you have a better information. The most important indicator is where the **current season sits within longer-term conditions**.That is, is this season better or worse, providing a basis for changing expectations and potentially inputs?
+**Stubble cover** is set to 30% throughout the fallow and crop. Bare soil will have reduced soil water and higher runoff.
+**Starting soil water** is evenly distributed in the soil profile and set at 10%. **Adjust** if you have a better information. The most important indicator is where the **current season sits within longer-term conditions**. That is, is this season better or worse, providing a basis for adjusting expectations and inputs?
 
 **Comments welcomed** David Freebairn: david.freebairn@gmail.com
 
 **Disclosure**
 
-This app aims to demonstrate value adding using recent and long term weather data and well tested water balance models. Output from these analyses should be used for **comparative purposes only** – how does this season compare with the longer term?
+This app aims to demonstrate value adding using recent and long-term weather data and a tested water balance model. Output from these analyses should be used for **comparative purposes only** – how does this season compare with the longer term? In_crop mineralisation rates are indicative only as these rates are influenced by many other factors not considered in this app.
 
 **Acknowledgements**
 
 **Weather data:** Queensland Government's SILO database sourced from the Bureau of Meteorology and the many voluntary weather recorders across the Australian continent since the 1890’s 
 
-**Soil water ** estimates use a well-tested water balance model used in cropping system models such as PERFECT, Howwet? SoilWaterApp and ApSim.
+**Soil water** estimates use a well-tested water balance model used in cropping system models such as PERFECT, Howwet? SoilWaterApp and ApSim.
 
 **App icon** generated using ChatGPT (GPT-5.5 image generation, OpenAI, 2026) from the developer’s design concept.
 
@@ -752,7 +752,7 @@ run_clicked = st.button("Run water balance", type="primary", disabled=bool(missi
 if missing:
     st.caption("⚠️ Still need: " + "; ".join(missing) + ".")
 elif auto_run and not run_clicked:
-    st.caption("🔄 Inputs changed — updating automatically. The button above still works any time you want to force a refresh.")
+    st.caption("🔄 Inputs changed — updating automatically. Click button above to force a refresh.")
 
 if (run_clicked or auto_run) and not missing:
     st.session_state["last_run_signature"] = input_signature
@@ -968,9 +968,7 @@ if st.session_state.get("result"):
         st.caption(
             "ℹ️ Gross NO3 mineralisation only \u2014 crop N-uptake not considered. Read the graph as N "
             "mineralised from the soil in the fallow and crop period, considering organic carbon, "
-            "surface moisture and temperature. Mineralisation rates have not been validated and are "
-            "indicative only. Relativity between seasons should be robust. If the estimated line is "
-            "above the median, it indicates a better than average NO3 gain."
+            "surface moisture and temperature. Mineralisation rates are indicative only. "
         )
 
         t_pct = r.get("t_pct")
@@ -990,11 +988,12 @@ if st.session_state.get("result"):
 
             st.markdown("**Nitrogen balance calculator**")
             st.caption(
-                "A provisional yield estimate provided to demonstrate calculator function \u2014 update with local "
-                "\u201clowest likely (Y20%ile)\u201d and \u201chighest likely (Y80%ile)\u201d values. The app "
-                "considers nitrogen in relation to water storage estimated above and is simplistic as many other "
-                "factors influence yield potential and nitrogen supply and demand (previous crop, carryover N, "
-                "frost, heat, disease, waterlogging)."
+                "Update with your estimates of lowest 1 in 5, average and best in 5 year yields. "
+                "The app considers nitrogen demand based on yield and protein. "
+                "N supply is the sum soil N (from soil test or estimate), fertiliser inputs " 
+                "and an estimate of in_crop mineralisation (from the N model). "
+                "Factors such as previous crop type and carryover N are not considered. "
+                "A simple economic analysis is based on grain and fertiliser prices. "
             )
             yc1, yc2, yc3 = st.columns(3)
             with yc2:
@@ -1077,16 +1076,14 @@ if st.session_state.get("result"):
 | Extra fertiliser cost to fulfil yield potential ($/ha) | {budget[20]['extra_fert_cost']:.0f} | {budget[50]['extra_fert_cost']:.0f} | {budget[80]['extra_fert_cost']:.0f} |
 """)
             st.caption(
-                f"\u2139\ufe0f Y20/Y80 suggested as {Y20_SUGGESTED_MULTIPLIER:.1f}x / {Y80_SUGGESTED_MULTIPLIER:.1f}x "
-                f"the mean/median yield \u2014 a rule of thumb, not a model output. Override with your own expected "
-                f"range for this paddock/season."
+                f"Suggested lowest in 5 and highest in 5 year yields based on a rule of thumb "
+                f" x0.6 and x1.5 of mean respectively. Override with your own values. "
+                f"Table updates immediately."
             )
             st.caption(
                 f"Nitrogen supply = soil test + fertiliser + median in-crop mineralisation ({in_crop_n_est:.0f} kg N/ha). "
                 f"This season's fallow mineralisation ({fallow_n_actual:.0f} kg N/ha, rated {fallow_rating_str.lower()} "
-                f"relative to the historical distribution) is shown for context only, not added to supply \u2014 a soil "
-                f"test taken after the fallow already reflects whatever mineralised over it, so adding both would "
-                f"double-count."
+                f"relative to the historical distribution) is shown for context only, not added to supply \u2014 "
             )
         else:
             st.caption("ℹ️ Not enough historical seasons with full climate coverage since 1995 to run the yield & nitrogen calculator here.")
